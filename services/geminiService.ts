@@ -21,62 +21,39 @@ const fileToGenerativePart = async (file: File) => {
  * Builds a detailed text prompt for image generation based on user inputs.
  */
 const buildPrompt = (modelData: ModelData, sceneData: SceneData, country: string, referenceData: ReferenceData, overallStyle: 'modern' | 'authentic', modelType: 'professional' | 'natural'): string => {
-  const sensualModeDirective = modelData.isSensual
-    ? `\n\n  **Sensual Mode Directive:** The overall tone of the photograph should be intimate, tasteful, and sensual. CRITICAL: The lighting, pose, and composition must be expertly crafted to tastefully and artistically accentuate the subject's specified **${modelData.bodyShape}** body shape. This is the primary goal of the sensual mode. Avoid anything explicit or vulgar.`
-    : '';
-
-  const personaDirective = modelType === 'professional'
-    ? `\n\n  **Subject Persona (CRITICAL):** The subject is a **Professional Model**. Their pose, expression, and gaze must reflect this. They are confident, skilled, and aware of the camera's presence. Their body language should be deliberate and composed.`
-    : `\n\n  **Subject Persona (CRITICAL):** The subject is a **Normal Person**, not a model. The goal is to capture a genuine, candid moment. Their pose, expression, and body language must be completely natural, unposed, and relaxed. They should appear unaware of the camera or as if a friend is taking their picture.`;
-
-  const ethnicFeaturesGuide = ETHNICITY_FEATURES_MAP[country] || 'A diverse range of human features.';
+  const personaDesc = modelType === 'professional' 
+    ? 'Professional model, confident pose.' 
+    : 'Candid, natural, unaware of camera.';
+    
+  const ethnicFeaturesGuide = ETHNICITY_FEATURES_MAP[country] || 'Diverse features.';
   const shotTypeDescription = SHOT_TYPE_DESCRIPTIONS[sceneData.shotType] || sceneData.shotType;
-  const outfitColorDirective = modelData.outfitColor && modelData.outfitColor.toLowerCase() !== 'any' ? `CRITICAL: The dominant color of the outfit MUST be **${modelData.outfitColor}**.` : '';
+  const outfitColorDirective = modelData.outfitColor && modelData.outfitColor.toLowerCase() !== 'any' ? `, Color: ${modelData.outfitColor}` : '';
 
+  // Compact, high-impact prompt structure for speed and realism
   const prompt = `
-  **//-- CORE DIRECTIVE: HYPER-REALISM --//**
-  **Goal:** Generate a single, **photorealistic** image that is indistinguishable from a high-end digital photograph. The aesthetic must be raw, authentic, and detailed.
-  **Seed:** ${Date.now()}
+  [DIRECTIVE: PHOTOREALISM]
+  Generate a RAW, AUTHENTIC, HIGH-RESOLUTION photograph.
+  Camera: 85mm f/1.2. Focus on texture, visible skin pores, imperfections, natural lighting. 
+  NO: CGI, illustration, 3D, plastic skin, airbrushed, smoothing, distortion, anime.
 
-  **//-- NEGATIVE PROMPT (STRICTLY FORBIDDEN) --//**
-  - **ABSOLUTELY NO:** Digital art, CGI, 3D rendering, video game graphics, illustration, painting, drawing, or anime styles.
-  - **NO:** Plastic skin, airbrushed textures, wax-figure looks, perfect symmetry, or "stock photo" artificiality.
-  - **NO:** Distorted limbs, extra fingers, or unnatural blurring.
+  [SUBJECT]
+  ${modelData.age}yo ${modelData.gender}. ${modelData.description}. Body: ${modelData.bodyShape}.
+  Expression: ${modelData.expression}. Pose: ${modelData.pose}.
+  Outfit: ${modelData.outfit}${outfitColorDirective}.
+  Ethnicity: ${country} (${ethnicFeaturesGuide}).
+  Persona: ${personaDesc}
+  ${modelData.isSensual ? 'Mood: Tasteful, sensual, intimate.' : ''}
 
-  **//-- PHOTOGRAPHIC ENGINE SETTINGS --//**
-  - **Camera:** Emulate a **Sony A7R V** or **Phase One XF IQ4**. 
-  - **Lens:** **85mm f/1.2 GM** or **105mm f/1.4 Art**. Focus on creating a realistic shallow depth of field with creamy bokeh that separates the subject from the background.
-  - **Skin Texture (HIGHEST PRIORITY):** You MUST render visible skin pores, vellus hair (peach fuzz), fine lines, and natural skin irregularities. Skin must NOT look smooth or plastic. Subsurface scattering is required for realistic lighting on skin.
-  - **Imperfections:** Introduce subtle signs of reality—stray hairs, slight fabric creases, dust motes in light beams, or natural asymmetry. 
+  [SCENE]
+  Location: ${sceneData.location}.
+  Lighting: ${sceneData.lighting}.
+  Mood: ${sceneData.mood}.
+  Details: ${sceneData.details}.
+  Framing: ${shotTypeDescription}.
 
-  ${sensualModeDirective}${personaDirective}
-
-  **//-- CULTURAL CONTEXT: ${country} --//**
-  - **Ethnicity:** The subject MUST authentically represent a person from **${country}**.
-  - **Features:** Strictly follow: **"${ethnicFeaturesGuide}"**.
-  - **Environment:** The location must feel like a real place in ${country}, not a generic set.
-
-  **//-- SUBJECT DETAILS --//**
-  - **Subject:** A ${modelData.age}-year-old ${modelData.gender}.
-  - **Body:** ${modelData.description}. Shape: **${modelData.bodyShape}**.
-  - **Expression:** ${modelData.expression}. Natural and unforced.
-  - **Pose:** ${modelData.pose}.
-  - **Outfit:** ${modelData.outfit}. ${outfitColorDirective}
-  - **Style:** ${overallStyle} aesthetic.
-
-  **//-- SCENE SETTINGS --//**
-  - **Framing:** **${shotTypeDescription}**.
-  - **Location:** ${sceneData.location}.
-  - **Lighting:** ${sceneData.lighting}. Ensure physically accurate light behavior (shadows, bounce, occlusion).
-  - **Mood:** ${sceneData.mood}.
-  - **Details:** ${sceneData.details}.
-
-  **//-- REFERENCE INSTRUCTIONS --//**
-  ${referenceData.usePhoto && referenceData.photo ? `
-    - Reference Image Provided.
-    - Style Match: ${referenceData.useStyle ? 'High' : 'None'}.
-    - Composition Match: ${referenceData.useComposition ? 'High' : 'None'}.
-  ` : 'No reference image.'}
+  [STYLE]
+  ${overallStyle} aesthetic.
+  ${referenceData.usePhoto ? 'Use provided image as strict reference.' : ''}
   `;
 
   return prompt;
@@ -254,26 +231,9 @@ export const adaptScenePreset = async (
   country: string
 ): Promise<Partial<SceneData>> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const prompt = `You are a reality simulation engine. Your task is to adapt a preset scene concept into a 100% realistic data profile for an average, everyday location in ${country}.
-  
-  **Core Mandate: Absolute Realism, NOT Aesthetics (NON-NEGOTIABLE)**
-  Your ONLY priority is raw, unpolished realism. AVOID glossy, idealized, or "influencer" aesthetics at all costs.
-
-  **MANDATE FOR MUNDANITY (ABSOLUTE RULE):**
-  - **AVOID:** Designer furniture, perfect cleanliness, trendy decor.
-  - **INCLUDE:** Normal signs of wear and tear, generic non-designer items, unplanned clutter, and culturally specific *commonplace* items.
-
-  **Adaptation Task:**
-  - **Original Scene Concept:** ${presetData.location}
-  - **Original Scene Details:** ${presetData.details}
-  - **Target Country:** ${country}
-
-  **Instruction (CRITICAL):**
-  Take the *essence* of the preset and filter it through your realism engine for ${country}. If the preset is "Grandma's Kitchen", you MUST describe a REAL, slightly messy, lived-in kitchen of a typical, non-wealthy grandmother in ${country}. It must NOT be a stylized, perfectly clean "farmhouse chic" kitchen. It must have authentic, culturally specific clutter.
-
-  Provide a JSON object with two keys: "location" and "details".
-  - "location": The rewritten, realistic, culturally-adapted location description.
-  - "details": The rewritten, realistic, culturally-adapted details with sensory information that ground the scene in unpolished reality.`;
+  const prompt = `Adapt this scene for ${country}. REALISTIC, MUNDANE, LIVED-IN.
+  Original: ${presetData.location}. ${presetData.details}
+  Return JSON { "location": "...", "details": "..." } with culturally authentic, non-idealized descriptions.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -284,8 +244,8 @@ export const adaptScenePreset = async (
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            location: { type: Type.STRING, description: "The rewritten, culturally-adapted location description." },
-            details: { type: Type.STRING, description: "The rewritten, culturally-adapted details with sensory information." },
+            location: { type: Type.STRING },
+            details: { type: Type.STRING },
           },
           required: ["location", "details"],
         },
@@ -296,7 +256,7 @@ export const adaptScenePreset = async (
     return jsonResponse as Partial<SceneData>;
   } catch (error: any) {
     console.error("Error adapting scene preset:", error);
-    throw new Error("Failed to adapt scene preset. The AI returned a response that could not be processed. Please try again.");
+    throw new Error("Failed to adapt scene preset.");
   }
 };
 
@@ -345,42 +305,17 @@ export const generateSmartRandomization = async (
     properties,
   };
 
-  const ethnicFeaturesGuide = ETHNICITY_FEATURES_MAP[country] || 'A diverse range of human features.';
+  const ethnicFeaturesGuide = ETHNICITY_FEATURES_MAP[country] || 'Diverse features.';
   
-  const sceneInstruction = sceneType === 'indoor'
-    ? 'The scene MUST be an indoor location.'
-    : 'The scene can be either indoor or outdoor.';
-
-  const outfitStyle = currentModel.isSensual ? 'tasteful and sensual' : overallStyle;
-  const outfitExamples = currentModel.isSensual ? SENSUAL_OUTFITS : (overallStyle === 'modern' ? MODERN_OUTFITS : AUTHENTIC_OUTFITS);
-
   const prompt = `
-  You are a radical creative director for a high-volume, photorealistic image generation tool. Your ONLY task is to generate wildly creative, non-obvious, and contextually perfect values for the "unlocked" fields below. This is for a user generating thousands of images, so avoiding repetition is the absolute highest priority.
-
-  **Current Photoshoot Context (Use this for inspiration and context):**
-  - **Country for Ethnicity & Location:** ${country}
-  - **Overall Style:** ${overallStyle}
-  - **Model Persona:** ${modelType}
-  - **Sensual Mode:** ${currentModel.isSensual}
-  - **Current Model Details (For Avoidance):** ${JSON.stringify(currentModel)}
-  - **Current Scene Details (For Avoidance):** ${JSON.stringify(currentScene)}
-
-  **Your ONLY Task:**
-  Generate new, creative values for the following fields ONLY: **${fieldsToRandomizeList}**.
-  Your response MUST be a JSON object containing keys for ONLY these fields.
-
-  **CRITICAL RULES for generating new values:**
-  1.  **RADICAL DIVERGENCE:** The new values MUST be a massive creative leap from the current values. Subtle changes are a failure. Think "completely different photoshoot".
-  2.  **AVOID CLICHÉS:** Actively reject the most common or stereotypical ideas associated with the context (${country}, ${overallStyle}). Find a unique, unexpected angle.
-  3.  **CULTURAL & CONTEXTUAL AWARENESS:** All generated values must be authentic and appropriate for the given context (${country}, ${overallStyle}, ${modelType}, etc.).
-  4.  **ETHNIC FEATURES (If 'description' or 'tones' are requested):** You MUST strictly adhere to this guide for authentic features: **"${ethnicFeaturesGuide}"**. Create a specific individual, do not repeat the guide.
-  5.  **BODY SHAPE (If requested):** The body shape must be realistic and consistent with the overall description.
-  6.  **OUTFIT (If requested):** The outfit MUST strictly match the '${outfitStyle}' style. It must also be culturally appropriate for ${country}. To ensure this, create a new, unique outfit description inspired by the following examples for a '${outfitStyle}' look, but DO NOT copy them directly: ${JSON.stringify(outfitExamples)}.
-  7.  **OUTFIT COLOR (If requested):** Generate a creative and suitable color for the described outfit. It can be a simple color ('red') or more descriptive ('sky blue').
-  8.  **POSE (If requested):** The pose must match the model persona (${modelType}) and sensuality (${currentModel.isSensual}).
-  9.  **SCENE (If requested):** Scene elements must feel like a real, mundane, and culturally authentic place in ${country}. Avoid idealized or generic descriptions. ${sceneInstruction}
-
-  Generate the JSON response now.
+  Context: ${country}, ${overallStyle}, ${modelType}.
+  Task: Creative randomization for fields: ${fieldsToRandomizeList}.
+  Rules:
+  1. Unique, non-cliché values.
+  2. Culturally authentic to ${country}.
+  3. ${unlockedModel.includes('outfit') ? `Outfit: ${overallStyle} style.` : ''}
+  4. Features: ${ethnicFeaturesGuide}.
+  Generate JSON.
   `;
   
   const response = await ai.models.generateContent({
@@ -396,8 +331,8 @@ export const generateSmartRandomization = async (
     const jsonResponse = extractJson(response.text);
     return jsonResponse as Partial<ModelData & SceneData>;
   } catch (error) {
-      console.error("Failed to parse JSON from smart randomization response. Original text:", response.text);
-      throw new Error("Failed to process randomization. The AI returned a response that could not be read.");
+      console.error("Failed to parse JSON from smart randomization response.", error);
+      throw new Error("Failed to process randomization.");
   }
 };
 
@@ -406,7 +341,6 @@ const pickRandom = <T>(options: T[], currentValue?: T): T => {
   if (filteredOptions.length > 0) {
     return filteredOptions[Math.floor(Math.random() * filteredOptions.length)];
   }
-  // Fallback if all options are the same as current or options is empty
   return options[Math.floor(Math.random() * options.length)];
 };
 
